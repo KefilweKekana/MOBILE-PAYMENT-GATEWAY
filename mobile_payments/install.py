@@ -157,30 +157,20 @@ def _create_custom_fields():
         ],
     }
 
+    # Temporarily disable doctype field validation during custom field creation.
+    # Some ERPNext instances have pre-existing broken fields (e.g. restaurant_table
+    # with invalid options) that cause validate_fields_for_doctype() to throw when
+    # ANY new custom field is added to that doctype. Monkey-patching the validator
+    # to a no-op during our install avoids this without modifying existing data.
+    from frappe.core.doctype.doctype import doctype as doctype_module
+
+    original_validate = doctype_module.validate_fields_for_doctype
+    doctype_module.validate_fields_for_doctype = lambda *args, **kwargs: None
+
     try:
         create_custom_fields(custom_fields, update=True)
-    except Exception:
-        # Some ERPNext instances have pre-existing broken fields that cause
-        # validation errors. Fall back to creating fields one-by-one with
-        # ignore_validate to work around this.
-        for doctype, fields in custom_fields.items():
-            for df in fields:
-                try:
-                    field_name = f"{doctype}-{df['fieldname']}"
-                    if not frappe.db.exists("Custom Field", field_name):
-                        doc = frappe.get_doc({
-                            "doctype": "Custom Field",
-                            "dt": doctype,
-                            "owner": "Administrator",
-                            **df,
-                        })
-                        doc.flags.ignore_validate = True
-                        doc.insert(ignore_permissions=True)
-                except Exception as e:
-                    frappe.log_error(
-                        f"Failed to create custom field {df['fieldname']} on {doctype}: {e}",
-                        "Mobile Payments Install",
-                    )
+    finally:
+        doctype_module.validate_fields_for_doctype = original_validate
 
 
 def _remove_custom_fields():
