@@ -5,6 +5,8 @@ WaafiPay and Edahab mobile payment integrations.
 """
 from __future__ import unicode_literals
 
+import json
+
 import frappe
 from frappe import _
 from frappe.model.document import Document
@@ -115,6 +117,137 @@ class MobilePaymentSettings(Document):
     def get_settings():
         """Get the singleton settings document."""
         return frappe.get_single("Mobile Payment Settings")
+
+
+@frappe.whitelist()
+def test_waafipay_connection():
+    """Test WaafiPay API credentials by making a lightweight API call."""
+    import requests as req
+
+    settings = frappe.get_single("Mobile Payment Settings")
+    if not settings.waafipay_enabled:
+        frappe.throw(_("WaafiPay is not enabled"))
+
+    creds = settings.get_waafipay_credentials()
+
+    # Use a zero-amount pre-authorize or a health-check style call.
+    # WaafiPay's API will validate credentials and return an auth error
+    # if they are wrong, or a business-logic error if they are correct.
+    payload = {
+        "schemaVersion": "1.0",
+        "requestId": frappe.generate_hash(length=16),
+        "timestamp": frappe.utils.now_datetime().isoformat(),
+        "channelName": "WEB",
+        "serviceName": "API_PURCHASE",
+        "serviceParams": {
+            "merchantUid": creds["merchant_uid"],
+            "apiUserId": creds["api_user_id"],
+            "apiKey": creds["api_key"],
+            "transactionInfo": {
+                "referenceId": f"TEST-{frappe.generate_hash(length=8)}",
+                "invoiceId": "CONNECTION-TEST",
+                "amount": "0",
+                "currency": "USD",
+                "description": "Connection test - ignore",
+            },
+            "paymentInfo": {
+                "accountNo": "0000000000",
+            },
+        },
+    }
+
+    try:
+        url = creds["base_url"]
+        resp = req.post(
+            url,
+            json=payload,
+            headers={"Content-Type": "application/json"},
+            timeout=15,
+        )
+        data = resp.json()
+        code = data.get("responseCode", "")
+        msg = data.get("responseMsg", "")
+
+        # 5310 = invalid phone/amount (means credentials are valid, request reached business logic)
+        # 2001 = success (unlikely for zero amount but possible)
+        # 5206/5001 = auth failure
+        auth_failure_codes = ["5206", "5001", "4001", "E0001"]
+
+        if code in auth_failure_codes:
+            return {
+                "success": False,
+                "message": f"Authentication failed: {msg} (code {code}). Check your Merchant UID, API User ID, and API Key.",
+            }
+        else:
+            return {
+                "success": True,
+                "message": f"WaafiPay credentials are valid! API responded with code {code}: {msg}",
+            }
+    except req.exceptions.ConnectionError:
+        return {"success": False, "message": f"Cannot connect to {creds['base_url']}. Check the Base URL."}
+    except req.exceptions.Timeout:
+        return {"success": False, "message": "Connection timed out. The WaafiPay server is not responding."}
+    except Exception as e:
+        return {"success": False, "message": f"Connection test failed: {str(e)}"}
+
+
+@frappe.whitelist()
+def test_edahab_connection():
+    """Test Edahab API credentials by making a lightweight API call."""
+    import hashlib
+    import requests as req
+
+    settings = frappe.get_single("Mobile Payment Settings")
+    if not settings.edahab_enabled:
+        frappe.throw(_("Edahab is not enabled"))
+
+    creds = settings.get_edahab_credentials()
+
+    # Edahab uses hash-based auth. Send a minimal request to validate.
+    request_data = {
+        "apiKey": creds["api_key"],
+        "edahabNumber": "0000000000",
+        "amount": 0,
+        "agentCode": creds.get("agent_code", ""),
+        "currency": "USD",
+        "description": "Connection test - ignore",
+    }
+
+    # Edahab uses SHA256 hash for signing
+    hash_input = json.dumps(request_data, separators=(",", ":")) + creds["api_secret"]
+    request_hash = hashlib.sha256(hash_input.encode()).hexdigest()
+
+    try:
+        url = f"{creds['base_url']}/api/edahabIssuance"
+        resp = req.post(
+            url,
+            json=request_data,
+            params={"hash": request_hash},
+            headers={"Content-Type": "application/json"},
+            timeout=15,
+        )
+        data = resp.json()
+        response_code = data.get("ResponseCode", data.get("responseCode", ""))
+        response_msg = data.get("ResponseMessage", data.get("responseMessage", ""))
+
+        auth_failure_codes = ["E10003", "E10004", "E10005", "401"]
+
+        if str(response_code) in auth_failure_codes:
+            return {
+                "success": False,
+                "message": f"Authentication failed: {response_msg} (code {response_code}). Check your API Key and Secret.",
+            }
+        else:
+            return {
+                "success": True,
+                "message": f"Edahab credentials are valid! API responded with code {response_code}: {response_msg}",
+            }
+    except req.exceptions.ConnectionError:
+        return {"success": False, "message": f"Cannot connect to {creds['base_url']}. Check the Base URL."}
+    except req.exceptions.Timeout:
+        return {"success": False, "message": "Connection timed out. The Edahab server is not responding."}
+    except Exception as e:
+        return {"success": False, "message": f"Connection test failed: {str(e)}"}
 
 
 def get_settings():
