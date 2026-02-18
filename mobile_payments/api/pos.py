@@ -112,7 +112,7 @@ def initiate_pos_payment(provider, method, phone, amount, pos_profile=None,
                 phone=phone,
                 amount=amount,
                 description=f"POS Payment - {customer or 'Walk-in'}",
-                transaction_id=log.transaction_id,
+                transaction_log=log.name,
             )
         else:
             from mobile_payments.api.waafipay import WaafiPayClient
@@ -122,7 +122,7 @@ def initiate_pos_payment(provider, method, phone, amount, pos_profile=None,
                 amount=amount,
                 method=method,
                 description=f"POS Payment - {customer or 'Walk-in'}",
-                transaction_id=log.transaction_id,
+                transaction_log=log.name,
             )
 
         if result.get("success"):
