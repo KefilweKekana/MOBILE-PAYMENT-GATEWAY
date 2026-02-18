@@ -157,7 +157,30 @@ def _create_custom_fields():
         ],
     }
 
-    create_custom_fields(custom_fields, update=True)
+    try:
+        create_custom_fields(custom_fields, update=True)
+    except Exception:
+        # Some ERPNext instances have pre-existing broken fields that cause
+        # validation errors. Fall back to creating fields one-by-one with
+        # ignore_validate to work around this.
+        for doctype, fields in custom_fields.items():
+            for df in fields:
+                try:
+                    field_name = f"{doctype}-{df['fieldname']}"
+                    if not frappe.db.exists("Custom Field", field_name):
+                        doc = frappe.get_doc({
+                            "doctype": "Custom Field",
+                            "dt": doctype,
+                            "owner": "Administrator",
+                            **df,
+                        })
+                        doc.flags.ignore_validate = True
+                        doc.insert(ignore_permissions=True)
+                except Exception as e:
+                    frappe.log_error(
+                        f"Failed to create custom field {df['fieldname']} on {doctype}: {e}",
+                        "Mobile Payments Install",
+                    )
 
 
 def _remove_custom_fields():
