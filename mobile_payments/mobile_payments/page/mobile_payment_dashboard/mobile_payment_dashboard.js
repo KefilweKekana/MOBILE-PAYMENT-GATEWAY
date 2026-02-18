@@ -111,26 +111,26 @@ frappe.pages["mobile-payment-dashboard"].on_page_load = function (wrapper) {
   function render_stats(summary) {
     let stats_html = `
       <div class="col-sm-6 col-md-3">
-        <div class="stat-card success">
+        <div class="stat-card success" style="cursor:pointer;" data-filter="Completed">
           <div class="stat-label">${__("Successful")}</div>
           <div class="stat-value">${summary.successful}</div>
           <small class="text-muted">${format_currency(summary.total_amount)}</small>
         </div>
       </div>
       <div class="col-sm-6 col-md-3">
-        <div class="stat-card danger">
+        <div class="stat-card danger" style="cursor:pointer;" data-filter="Failed">
           <div class="stat-label">${__("Failed")}</div>
           <div class="stat-value">${summary.failed}</div>
         </div>
       </div>
       <div class="col-sm-6 col-md-3">
-        <div class="stat-card warning">
+        <div class="stat-card warning" style="cursor:pointer;" data-filter="Pending">
           <div class="stat-label">${__("Pending / Retry")}</div>
           <div class="stat-value">${summary.pending + summary.retry_queue}</div>
         </div>
       </div>
       <div class="col-sm-6 col-md-3">
-        <div class="stat-card info">
+        <div class="stat-card info" style="cursor:pointer;" data-filter="all">
           <div class="stat-label">${__("Success Rate")}</div>
           <div class="stat-value">${summary.success_rate}%</div>
           <small class="text-muted">${summary.unreconciled} ${__("unreconciled")}</small>
@@ -138,6 +138,16 @@ frappe.pages["mobile-payment-dashboard"].on_page_load = function (wrapper) {
       </div>
     `;
     page.main.find("#mpay-stats").html(stats_html);
+
+    // Make cards clickable — navigate to filtered transaction log
+    page.main.find(".stat-card").on("click", function () {
+      let filter = $(this).data("filter");
+      if (filter === "all") {
+        frappe.set_route("List", "Mobile Payment Transaction Log");
+      } else {
+        frappe.set_route("List", "Mobile Payment Transaction Log", { status: filter });
+      }
+    });
   }
 
   function render_chart(daily_volume) {
