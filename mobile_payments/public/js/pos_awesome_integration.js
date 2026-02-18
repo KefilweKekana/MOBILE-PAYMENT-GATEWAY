@@ -65,15 +65,31 @@ mobile_payments.pos = {
   },
 
   /**
-   * Watch for POS Awesome payment section to load using MutationObserver.
+   * Watch for POS payment section to load using MutationObserver.
+   * Supports both POS Awesome (classic) and Vuetify-based POS System.
    */
   _watch_pos_payment_section: function () {
+    // Also try to inject immediately if POS is already loaded
+    mobile_payments.pos._try_inject_now();
+
     let observer = new MutationObserver(function (mutations) {
       for (let mutation of mutations) {
         for (let node of mutation.addedNodes) {
           if (node.nodeType !== 1) continue;
 
-          // Look for POS Awesome payment section
+          // ── Vuetify POS System (pay-btn, summary-btn) ──
+          let payBtn = node.querySelector && node.querySelector(".pay-btn, .summary-btn");
+          if (!payBtn && node.classList) {
+            payBtn = (node.classList.contains("pay-btn") || node.classList.contains("summary-btn")) ? node : null;
+          }
+          if (payBtn) {
+            setTimeout(function () {
+              mobile_payments.pos._add_mobile_money_button_vuetify(payBtn);
+            }, 500);
+            continue;
+          }
+
+          // ── Classic POS Awesome (payment-container, pos-payment) ──
           let paymentSection =
             node.querySelector && node.querySelector(".payment-container, .pos-payment, .payment-methods");
 
@@ -86,7 +102,6 @@ mobile_payments.pos = {
           }
 
           if (paymentSection) {
-            // Small delay to let Vue render complete
             setTimeout(function () {
               mobile_payments.pos._add_mobile_payment_button(paymentSection);
             }, 300);
@@ -99,6 +114,84 @@ mobile_payments.pos = {
       childList: true,
       subtree: true,
     });
+
+    // Periodic check as fallback — Vuetify POS may render after observer attaches
+    let retries = 0;
+    let interval = setInterval(function () {
+      retries++;
+      if (retries > 30) { // Stop after 30 seconds
+        clearInterval(interval);
+        return;
+      }
+      mobile_payments.pos._try_inject_now();
+    }, 1000);
+  },
+
+  /**
+   * Try to inject the Mobile Money button immediately if POS is already rendered.
+   */
+  _try_inject_now: function () {
+    // Already injected?
+    if (document.querySelector(".mobile-payment-pos-btn")) return;
+
+    // Vuetify POS: look for .pay-btn
+    let payBtn = document.querySelector(".pay-btn");
+    if (payBtn) {
+      mobile_payments.pos._add_mobile_money_button_vuetify(payBtn);
+      return;
+    }
+
+    // Classic POS Awesome
+    let section = document.querySelector(".payment-container, .pos-payment, .payment-methods");
+    if (section) {
+      mobile_payments.pos._add_mobile_payment_button(section);
+    }
+  },
+
+  /**
+   * Add "Mobile Money" button for Vuetify-based POS System.
+   * Inserts a button next to the PAY button.
+   */
+  _add_mobile_money_button_vuetify: function (payBtn) {
+    // Don't add if already exists
+    if (document.querySelector(".mobile-payment-pos-btn")) return;
+
+    let methods = mobile_payments.pos._methods;
+    if (!methods || !methods.length) return;
+
+    // Create a Vuetify-styled Mobile Money button
+    let btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "mobile-payment-pos-btn v-btn v-btn--block v-btn--elevated v-theme--dark v-btn--density-default v-btn--size-large v-btn--variant-elevated";
+    btn.style.cssText = "background-color: #2ecc71 !important; color: white !important; margin-bottom: 8px; border: none; display: flex; align-items: center; justify-content: center; min-height: 44px; border-radius: 4px; font-weight: 600; font-size: 14px; cursor: pointer; width: 100%;";
+    btn.innerHTML = `
+      <span class="v-btn__content" style="display:flex; align-items:center; gap:8px;">
+        <i class="fa fa-mobile" style="font-size:20px;"></i>
+        <span>MOBILE MONEY</span>
+      </span>
+    `;
+
+    // Hover effect
+    btn.addEventListener("mouseenter", function() {
+      this.style.backgroundColor = "#27ae60 !important";
+      this.style.opacity = "0.9";
+    });
+    btn.addEventListener("mouseleave", function() {
+      this.style.backgroundColor = "#2ecc71 !important";
+      this.style.opacity = "1";
+    });
+
+    btn.addEventListener("click", function (e) {
+      e.preventDefault();
+      e.stopPropagation();
+      mobile_payments.pos.show_pos_payment_dialog();
+    });
+
+    // Insert BEFORE the PAY button's parent
+    let parentContainer = payBtn.parentElement;
+    if (parentContainer) {
+      parentContainer.insertBefore(btn, payBtn);
+    }
   },
 
   /**
