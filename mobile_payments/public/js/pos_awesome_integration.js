@@ -16,12 +16,27 @@ mobile_payments.pos = {
    */
   _methods: null,
   _enabled: false,
+  _initialized: false,
+
+  /**
+   * Detect whether the current page is any variant of POS.
+   */
+  _is_pos_page: function () {
+    let posPattern = /\/(pos-awesome|point-of-sale|pos-system|pos-closing-entry|pos(?:[\/\#\?]|$))/;
+    if (posPattern.test(window.location.pathname) || posPattern.test(window.location.hash)) return true;
+    if (document.querySelector(".pos-awesome-app, #pos-awesome-root, .pay-btn, .summary-btn, .pos-container")) return true;
+    try { if (posPattern.test(frappe.get_route_str())) return true; } catch(e) {}
+    return false;
+  },
 
   /**
    * Initialize POS Awesome integration.
    * Called when POS Awesome loads.
    */
   init: function () {
+    if (mobile_payments.pos._initialized) return;
+    mobile_payments.pos._initialized = true;
+
     // Load available methods from backend
     frappe.call({
       method: "mobile_payments.api.pos.get_mobile_payment_methods",
@@ -119,7 +134,7 @@ mobile_payments.pos = {
     let retries = 0;
     let interval = setInterval(function () {
       retries++;
-      if (retries > 30) { // Stop after 30 seconds
+      if (document.querySelector(".mobile-payment-pos-btn") || retries > 30) {
         clearInterval(interval);
         return;
       }
@@ -173,11 +188,11 @@ mobile_payments.pos = {
 
     // Hover effect
     btn.addEventListener("mouseenter", function() {
-      this.style.backgroundColor = "#27ae60 !important";
+      this.style.setProperty("background-color", "#27ae60", "important");
       this.style.opacity = "0.9";
     });
     btn.addEventListener("mouseleave", function() {
-      this.style.backgroundColor = "#2ecc71 !important";
+      this.style.setProperty("background-color", "#2ecc71", "important");
       this.style.opacity = "1";
     });
 
@@ -784,13 +799,7 @@ mobile_payments.pos = {
 // ─── Auto-Initialize on POS Page Load ──────────────────────────
 
 $(document).ready(function () {
-  // Check if we're on POS page
-  if (
-    window.location.pathname.includes("/pos-awesome") ||
-    window.location.pathname.includes("/point-of-sale") ||
-    window.location.hash.includes("pos-awesome") ||
-    document.querySelector(".pos-awesome-app, #pos-awesome-root")
-  ) {
+  if (mobile_payments.pos._is_pos_page()) {
     mobile_payments.pos.init();
   }
 });
@@ -799,22 +808,17 @@ $(document).ready(function () {
 if (frappe.router && frappe.router.on) {
   frappe.router.on("change", function () {
     setTimeout(function () {
-      if (
-        frappe.get_route_str().includes("pos-awesome") ||
-        frappe.get_route_str().includes("point-of-sale")
-      ) {
+      if (mobile_payments.pos._is_pos_page()) {
+        mobile_payments.pos._initialized = false; // allow re-init on navigation
         mobile_payments.pos.init();
       }
     }, 500);
   });
 } else {
-  // Fallback: watch for hashchange
   $(window).on("hashchange", function () {
     setTimeout(function () {
-      if (
-        window.location.hash.includes("pos-awesome") ||
-        window.location.hash.includes("point-of-sale")
-      ) {
+      if (mobile_payments.pos._is_pos_page()) {
+        mobile_payments.pos._initialized = false;
         mobile_payments.pos.init();
       }
     }, 500);
