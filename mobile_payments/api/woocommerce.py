@@ -275,7 +275,7 @@ def initiate_wc_payment():
                     phone=phone,
                     amount=amount,
                     description=f"WooCommerce Order #{wc_order_id}",
-                    transaction_id=log.transaction_id,
+                    transaction_log=log.name,
                 )
             else:
                 from mobile_payments.api.waafipay import WaafiPayClient
@@ -285,7 +285,7 @@ def initiate_wc_payment():
                     amount=amount,
                     method=method,
                     description=f"WooCommerce Order #{wc_order_id}",
-                    transaction_id=log.transaction_id,
+                    transaction_log=log.name,
                 )
 
             if result.get("success"):
