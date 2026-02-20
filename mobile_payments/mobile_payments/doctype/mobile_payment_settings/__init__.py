@@ -1,1 +1,0 @@
-# Mobile Payment Settings Doctype
