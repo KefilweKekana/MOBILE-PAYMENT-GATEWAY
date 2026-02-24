@@ -1,1 +1,0 @@
-# Mobile Payments - Utilities Module
