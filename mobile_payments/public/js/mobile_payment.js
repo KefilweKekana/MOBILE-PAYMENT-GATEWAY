@@ -288,8 +288,8 @@ var mobile_payments = {
     // Scoped CSS for the payment dialog
     let dialog_css = `
       <style>
-        .mp-dialog .modal-dialog { max-width: 400px; height: 50em; }
-        .mp-dialog .modal-content { border-radius: 20px !important; overflow: hidden !important; border: none !important; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); background: #10b981 !important; }
+        .mp-dialog .modal-dialog { max-width: 440px; height: 50em; }
+        .mp-dialog .modal-content { border-radius: 20px !important; overflow: hidden !important; border: none !important; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); background: #10b981 !important; padding: 0 !important; }
         .mp-dialog .modal-header { display: none !important; height: 0 !important; min-height: 0 !important; padding: 0 !important; margin: 0 !important; border: none !important; }
         .mp-dialog .modal-body { padding: 0 !important; margin: 0 !important; background: #fff !important; }
         .mp-dialog .modal-body > .form-layout,
