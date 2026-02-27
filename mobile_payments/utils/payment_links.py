@@ -1,0 +1,289 @@
+"""
+Auto-generate WaafiPay and Edahab HPP payment links on Sales Invoices.
+
+When a Sales Invoice's due_date is today, both payment links are generated
+and stored in the custom fields `waafi_payment_link` and `edahab_payment_link`.
+
+Triggered by:
+  - Sales Invoice on_submit / validate (if due_date == today)
+  - Daily scheduled task (for existing invoices becoming due today)
+  - Manual button click on the Sales Invoice form
+"""
+from __future__ import unicode_literals
+
+import frappe
+from frappe import _
+from frappe.utils import getdate, today, flt, now_datetime
+
+
+def generate_payment_links_if_due(doc, method=None):
+    """
+    Hook for Sales Invoice on_submit / on_update_after_submit.
+    Generates payment links if due_date is today and invoice is unpaid.
+    """
+    if not doc.due_date:
+        return
+
+    if getdate(doc.due_date) != getdate(today()):
+        return
+
+    # Only for submitted, unpaid invoices
+    if doc.docstatus != 1:
+        return
+
+    if flt(doc.outstanding_amount) <= 0:
+        return
+
+    # Don't regenerate if both links already exist
+    if doc.get("waafi_payment_link") and doc.get("edahab_payment_link"):
+        return
+
+    _generate_links_for_invoice(doc)
+
+
+def daily_generate_payment_links():
+    """
+    Scheduled task: runs daily to generate payment links for all
+    Sales Invoices whose due_date is today and are still unpaid.
+    """
+    settings = frappe.get_single("Mobile Payment Settings")
+    if not settings.enabled:
+        return
+
+    invoices = frappe.get_all(
+        "Sales Invoice",
+        filters={
+            "due_date": today(),
+            "docstatus": 1,
+            "outstanding_amount": [">", 0],
+        },
+        fields=["name"],
+    )
+
+    generated_count = 0
+    for inv in invoices:
+        doc = frappe.get_doc("Sales Invoice", inv.name)
+
+        # Skip if both links already exist
+        if doc.get("waafi_payment_link") and doc.get("edahab_payment_link"):
+            continue
+
+        try:
+            _generate_links_for_invoice(doc)
+            generated_count += 1
+        except Exception as e:
+            frappe.log_error(
+                message=(
+                    f"Failed to generate payment links for {inv.name}: {str(e)}\n"
+                    f"{frappe.get_traceback()}"
+                ),
+                title="Payment Link Generation Error",
+            )
+
+    if generated_count:
+        frappe.logger("mobile_payments").info(
+            f"Generated payment links for {generated_count} invoices due today"
+        )
+
+
+@frappe.whitelist()
+def generate_links_for_invoice(invoice_name):
+    """
+    Manually generate payment links for a Sales Invoice.
+    Called from a button on the Sales Invoice form.
+
+    Args:
+        invoice_name: Sales Invoice name
+
+    Returns:
+        dict with waafi_payment_link and edahab_payment_link
+    """
+    doc = frappe.get_doc("Sales Invoice", invoice_name)
+
+    if doc.docstatus != 1:
+        frappe.throw(_("Invoice must be submitted to generate payment links"))
+
+    if flt(doc.outstanding_amount) <= 0:
+        frappe.throw(_("Invoice is already fully paid"))
+
+    result = _generate_links_for_invoice(doc)
+    return result
+
+
+def _generate_links_for_invoice(doc):
+    """
+    Core function: generate both WaafiPay and Edahab HPP links for an invoice.
+    Stores them in the custom fields on the Sales Invoice.
+
+    Args:
+        doc: Sales Invoice document
+
+    Returns:
+        dict with waafi_payment_link and edahab_payment_link
+    """
+    settings = frappe.get_single("Mobile Payment Settings")
+    if not settings.enabled:
+        return {"waafi_payment_link": "", "edahab_payment_link": ""}
+
+    # Use grand_total (transaction currency) not outstanding_amount (company currency).
+    # outstanding_amount is in company/base currency — for foreign-currency invoices
+    # (e.g. SOS) this gives the wrong number (e.g. 1 USD instead of 10,000 SOS).
+    amount = flt(doc.rounded_total or doc.grand_total)
+    if not amount:
+        # last resort: convert outstanding back using invoice exchange rate
+        rate = flt(doc.conversion_rate or 1)
+        amount = flt(doc.outstanding_amount) * rate
+    currency = doc.currency or "USD"
+    description = f"Payment for {doc.name}"
+    result = {}
+
+    # ── Generate WaafiPay HPP Link ──
+    if settings.waafipay_enabled and not doc.get("waafi_payment_link"):
+        try:
+            # Validate ALL required credentials before attempting link generation
+            creds = settings.get_waafipay_credentials()
+            missing = []
+            if not creds.get("merchant_uid"):
+                missing.append("Merchant UID")
+            if not creds.get("api_key"):
+                missing.append("API Key")
+            if not creds.get("store_id"):
+                missing.append("Store ID")
+            if not creds.get("hpp_key"):
+                missing.append("HPP Key")
+
+            frappe.logger("mobile_payments").info(
+                f"WaafiPay HPP link generation attempt for {doc.name} "
+                f"| Amount: {amount} {currency} | Missing: {missing or 'None'}"
+            )
+
+            if missing:
+                err = (
+                    f"WaafiPay HPP link generation failed for {doc.name}: "
+                    f"Missing credentials: {', '.join(missing)}. "
+                    f"Please configure them in Mobile Payment Settings."
+                )
+                frappe.log_error(message=err, title="Payment Link - Missing Credentials")
+                frappe.msgprint(
+                    _(
+                        "Cannot generate WaafiPay payment link: {0} is not configured. "
+                        "Please update Mobile Payment Settings."
+                    ).format(", ".join(missing)),
+                    title=_("Missing WaafiPay Credentials"),
+                    indicator="red",
+                )
+                result["waafi_payment_link"] = ""
+            else:
+                from mobile_payments.api.waafipay import WaafiPayClient
+                client = WaafiPayClient()
+                waafi_result = client.create_hpp_session(
+                    amount=amount,
+                    invoice_id=doc.name,
+                    description=description,
+                    currency=currency,
+                )
+
+                if waafi_result.get("success") and waafi_result.get("hpp_url"):
+                    result["waafi_payment_link"] = waafi_result["hpp_url"]
+                    frappe.logger("mobile_payments").info(
+                        f"WaafiPay HPP link generated for {doc.name}: {waafi_result['hpp_url']}"
+                    )
+                else:
+                    frappe.log_error(
+                        message=(
+                            f"WaafiPay HPP link generation failed for {doc.name}: "
+                            f"{waafi_result.get('message', 'Unknown error')}"
+                        ),
+                        title="WaafiPay HPP Link Error",
+                    )
+                    result["waafi_payment_link"] = ""
+        except Exception as e:
+            frappe.log_error(
+                message=(
+                    f"WaafiPay HPP link error for {doc.name}: {str(e)}\n"
+                    f"{frappe.get_traceback()}"
+                ),
+                title="WaafiPay HPP Link Error",
+            )
+            result["waafi_payment_link"] = ""
+
+    # ── Generate Edahab HPP Link ──
+    if settings.edahab_enabled and not doc.get("edahab_payment_link"):
+        try:
+            # Validate ALL required credentials before attempting link generation
+            edahab_creds = settings.get_edahab_credentials()
+            missing_ed = []
+            if not edahab_creds.get("api_key"):
+                missing_ed.append("API Key")
+            if not edahab_creds.get("api_secret"):
+                missing_ed.append("API Secret")
+
+            frappe.logger("mobile_payments").info(
+                f"Edahab HPP link generation attempt for {doc.name} "
+                f"| Amount: {amount} {currency} | Missing: {missing_ed or 'None'}"
+            )
+
+            if missing_ed:
+                err = (
+                    f"Edahab HPP link generation failed for {doc.name}: "
+                    f"Missing credentials: {', '.join(missing_ed)}. "
+                    f"Please configure them in Mobile Payment Settings."
+                )
+                frappe.log_error(message=err, title="Payment Link - Missing Credentials")
+                frappe.msgprint(
+                    _(
+                        "Cannot generate Edahab payment link: {0} is not configured. "
+                        "Please update Mobile Payment Settings."
+                    ).format(", ".join(missing_ed)),
+                    title=_("Missing Edahab Credentials"),
+                    indicator="red",
+                )
+                result["edahab_payment_link"] = ""
+            else:
+                from mobile_payments.api.edahab import EdahabClient
+                client = EdahabClient()
+                edahab_result = client.create_hpp_session(
+                    amount=amount,
+                    invoice_id=doc.name,
+                    description=description,
+                    currency=currency,
+                )
+
+                if edahab_result.get("success") and edahab_result.get("hpp_url"):
+                    result["edahab_payment_link"] = edahab_result["hpp_url"]
+                    frappe.logger("mobile_payments").info(
+                        f"Edahab HPP link generated for {doc.name}: {edahab_result['hpp_url']}"
+                    )
+                else:
+                    frappe.log_error(
+                        message=(
+                            f"Edahab HPP link generation failed for {doc.name}: "
+                            f"{edahab_result.get('message', 'Unknown error')}"
+                        ),
+                        title="Edahab HPP Link Error",
+                    )
+                    result["edahab_payment_link"] = ""
+        except Exception as e:
+            frappe.log_error(
+                message=(
+                    f"Edahab HPP link error for {doc.name}: {str(e)}\n"
+                    f"{frappe.get_traceback()}"
+                ),
+                title="Edahab HPP Link Error",
+            )
+            result["edahab_payment_link"] = ""
+
+    # ── Save the links to the Sales Invoice ──
+    if result:
+        update_fields = {}
+        if result.get("waafi_payment_link"):
+            update_fields["waafi_payment_link"] = result["waafi_payment_link"]
+        if result.get("edahab_payment_link"):
+            update_fields["edahab_payment_link"] = result["edahab_payment_link"]
+
+        if update_fields:
+            frappe.db.set_value("Sales Invoice", doc.name, update_fields,
+                                update_modified=False)
+            frappe.db.commit()
+
+    return result
