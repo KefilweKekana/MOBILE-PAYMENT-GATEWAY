@@ -298,14 +298,17 @@ var mobile_payments = {
         .mp-dialog .frappe-control[data-fieldname="payment_header"] .ql-editor,
         .mp-dialog .frappe-control[data-fieldname="payment_header"] .html-content { padding: 0 !important; margin: 0 !important; }
 
-        /* Header: zero margin/padding on all wrappers */
+        /* Header: zero margin/padding on ALL nested wrappers */
         .mp-dialog .modal-body > .frappe-control[data-fieldname="payment_header"],
         .mp-dialog .frappe-control[data-fieldname="payment_header"],
+        .mp-dialog .frappe-control[data-fieldname="payment_header"] > *,
         .mp-dialog .frappe-control[data-fieldname="payment_header"] .form-group,
         .mp-dialog .frappe-control[data-fieldname="payment_header"] .frappe-control-value,
         .mp-dialog .frappe-control[data-fieldname="payment_header"] .control-input-wrapper,
-        .mp-dialog .frappe-control[data-fieldname="payment_header"] .control-value {
-          margin: 0 !important; padding: 0 !important;
+        .mp-dialog .frappe-control[data-fieldname="payment_header"] .control-input,
+        .mp-dialog .frappe-control[data-fieldname="payment_header"] .control-value,
+        .mp-dialog .frappe-control[data-fieldname="payment_header"] .like-disabled-input {
+          margin: 0 !important; padding: 0 !important; border: none !important; background: none !important;
         }
 
         /* All other controls: side padding */
@@ -375,6 +378,7 @@ var mobile_payments = {
           background: linear-gradient(135deg, #10b981 0%, #059669 100%);
           color: #fff; text-align: center; padding: 40px 24px 34px; position: relative; overflow: hidden;
           margin: -1px -1px 0 -1px !important;
+          width: calc(100% + 2px) !important;
           border-radius: 20px 20px 0 0 !important;
         }
         .mp-amount-header::before {
@@ -421,7 +425,7 @@ var mobile_payments = {
           padding: 14px 32px; border-radius: 12px; width: 100%; cursor: pointer;
           box-shadow: 0 4px 6px -1px rgba(16,185,129,0.2); transition: all 0.2s;
           display: flex; align-items: center; justify-content: center; gap: 8px;
-          margin-top: 8px;
+          margin-top: 8px; margin-bottom: 28px;
         }
         .mp-pay-btn:hover { transform: translateY(-1px); box-shadow: 0 10px 15px -3px rgba(16,185,129,0.3); }
         .mp-pay-btn:active { transform: translateY(0); }
