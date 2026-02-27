@@ -308,7 +308,12 @@ var mobile_payments = {
         .mp-dialog .frappe-control[data-fieldname="payment_header"] .control-input,
         .mp-dialog .frappe-control[data-fieldname="payment_header"] .control-value,
         .mp-dialog .frappe-control[data-fieldname="payment_header"] .like-disabled-input {
-          margin: 0 !important; padding: 0 !important; border: none !important; background: none !important;
+          margin: 0 !important; padding: 0 !important; border: none !important; background: transparent !important;
+        }
+        /* Restore green gradient on the actual header div */
+        .mp-dialog .frappe-control[data-fieldname="payment_header"] .mp-amount-header {
+          background: linear-gradient(135deg, #10b981 0%, #059669 100%) !important;
+          padding: 40px 24px 34px !important;
         }
 
         /* All other controls: side padding */
