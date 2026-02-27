@@ -291,10 +291,13 @@ var mobile_payments = {
         .mp-dialog .modal-dialog { max-width: 440px; height: 50em; }
         .mp-dialog .modal-content { border-radius: 20px !important; overflow: hidden !important; border: none !important; box-shadow: 0 25px 50px -12px rgba(0,0,0,0.25); background: #10b981 !important; padding: 0 !important; }
         .mp-dialog .modal-header { display: none !important; height: 0 !important; min-height: 0 !important; padding: 0 !important; margin: 0 !important; border: none !important; }
-        .mp-dialog .modal-body { padding: 0 !important; margin: 0 !important; background: #fff !important; }
+        .mp-dialog .modal-body { padding: 0 !important; margin: 0 !important; background: #fff !important; border: none !important; }
         .mp-dialog .modal-body > .form-layout,
-        .mp-dialog .form-layout { padding: 0 !important; margin: 0 !important; }
-        .mp-dialog .form-page, .mp-dialog .form-layout .form-page { padding: 0 !important; margin: 0 !important; }
+        .mp-dialog .form-layout { padding: 0 !important; margin: 0 !important; border: none !important; }
+        .mp-dialog .form-page, .mp-dialog .form-layout .form-page { padding: 0 !important; margin: 0 !important; border: none !important; }
+        .mp-dialog .modal-body > *,
+        .mp-dialog .modal-body > .form-layout > *,
+        .mp-dialog .modal-body .standard-form-layout { padding-left: 0 !important; padding-right: 0 !important; margin-left: 0 !important; margin-right: 0 !important; border: none !important; }
         .mp-dialog .frappe-control[data-fieldname="payment_header"] .ql-editor,
         .mp-dialog .frappe-control[data-fieldname="payment_header"] .html-content { padding: 0 !important; margin: 0 !important; }
 
