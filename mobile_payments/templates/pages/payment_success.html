@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Payment Successful</title>
+    <style>
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+            background: linear-gradient(135deg, #e8f5e9 0%, #f1f8e9 100%);
+            padding: 20px;
+        }
+        .card {
+            text-align: center;
+            padding: 48px 40px;
+            background: #fff;
+            border-radius: 16px;
+            box-shadow: 0 4px 24px rgba(0,0,0,0.08);
+            max-width: 440px;
+            width: 100%;
+        }
+        .icon-circle {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            background: #e8f5e9;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 24px;
+        }
+        .icon-circle svg {
+            width: 40px;
+            height: 40px;
+            color: #2e7d32;
+        }
+        h1 {
+            font-size: 24px;
+            font-weight: 700;
+            color: #1b5e20;
+            margin-bottom: 8px;
+        }
+        .subtitle {
+            font-size: 16px;
+            color: #555;
+            margin-bottom: 28px;
+        }
+        .details {
+            background: #f9fafb;
+            border-radius: 10px;
+            padding: 20px;
+            margin-bottom: 28px;
+            text-align: left;
+        }
+        .detail-row {
+            display: flex;
+            justify-content: space-between;
+            padding: 8px 0;
+            font-size: 14px;
+            border-bottom: 1px solid #eee;
+        }
+        .detail-row:last-child { border-bottom: none; }
+        .detail-label { color: #888; }
+        .detail-value { color: #333; font-weight: 600; }
+        .amount-value { color: #2e7d32; font-size: 18px; font-weight: 700; }
+        .btn {
+            display: inline-block;
+            padding: 12px 32px;
+            border-radius: 8px;
+            font-size: 15px;
+            font-weight: 600;
+            text-decoration: none;
+            cursor: pointer;
+            border: none;
+            transition: all 0.2s;
+        }
+        .btn-primary {
+            background: #2e7d32;
+            color: #fff;
+        }
+        .btn-primary:hover { background: #1b5e20; }
+        .btn-secondary {
+            background: transparent;
+            color: #555;
+            margin-left: 12px;
+        }
+        .btn-secondary:hover { color: #333; text-decoration: underline; }
+        .btn-row { margin-top: 8px; }
+        .footer-note {
+            margin-top: 24px;
+            font-size: 12px;
+            color: #aaa;
+        }
+        /* Checkmark animation */
+        @keyframes checkPop {
+            0% { transform: scale(0); opacity: 0; }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); opacity: 1; }
+        }
+        .icon-circle { animation: checkPop 0.5s ease-out; }
+    </style>
+</head>
+<body>
+    <div class="card">
+        <div class="icon-circle">
+            <svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2.5">
+                <path stroke-linecap="round" stroke-linejoin="round" d="M5 13l4 4L19 7" />
+            </svg>
+        </div>
+
+        <h1>Payment Successful!</h1>
+        <p class="subtitle">Your payment has been received and processed.</p>
+
+        <div class="details" id="details" style="display:none;">
+            <div class="detail-row" id="row-invoice" style="display:none;">
+                <span class="detail-label">Invoice</span>
+                <span class="detail-value" id="val-invoice"></span>
+            </div>
+            <div class="detail-row" id="row-amount" style="display:none;">
+                <span class="detail-label">Amount Paid</span>
+                <span class="detail-value amount-value" id="val-amount"></span>
+            </div>
+            <div class="detail-row" id="row-provider" style="display:none;">
+                <span class="detail-label">Paid Via</span>
+                <span class="detail-value" id="val-provider"></span>
+            </div>
+            <div class="detail-row" id="row-txn" style="display:none;">
+                <span class="detail-label">Transaction ID</span>
+                <span class="detail-value" id="val-txn"></span>
+            </div>
+        </div>
+
+        <div class="btn-row">
+            <a class="btn btn-primary" id="btn-view" href="/app/sales-invoice">View Invoice</a>
+            <a class="btn btn-secondary" href="/app">Go to Dashboard</a>
+        </div>
+
+        <p class="footer-note">A receipt has been recorded in the system automatically.</p>
+    </div>
+
+    <script>
+        (function() {
+            var params = new URLSearchParams(window.location.search);
+            var invoice = params.get('invoice');
+            var amount = params.get('amount');
+            var currency = params.get('currency') || 'USD';
+            var provider = params.get('provider');
+            var txn = params.get('txn');
+            var hasDetails = false;
+
+            function show(id, val) {
+                if (val) {
+                    document.getElementById('row-' + id).style.display = 'flex';
+                    document.getElementById('val-' + id).textContent = val;
+                    hasDetails = true;
+                }
+            }
+
+            show('invoice', invoice);
+            show('amount', amount ? ('$' + parseFloat(amount).toFixed(2) + ' ' + currency) : '');
+            show('provider', provider);
+            show('txn', txn);
+
+            if (hasDetails) {
+                document.getElementById('details').style.display = 'block';
+            }
+
+            if (invoice) {
+                var btn = document.getElementById('btn-view');
+                btn.href = '/app/sales-invoice/' + encodeURIComponent(invoice);
+                btn.textContent = 'View Invoice';
+            }
+        })();
+    </script>
+</body>
+</html>
